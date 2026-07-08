@@ -1,0 +1,39 @@
+//
+// Third attempt: null-space inspection showed the actual gap isn't predicate/bank variety at
+// all - it's that every known LOP_P_R_R_cAI record is unconditional (guard predicate index = 7,
+// i.e. PT), while the target instruction is executed under a real guard (@P1). This probe uses
+// PTX-level predication (@%p ...) directly on the xor/setp pair so ptxas keeps it as a genuinely
+// guarded SASS instruction instead of unconditional or a branch.
+//
+.version 7.0
+.target sm_61
+.address_size 64
+
+.visible .entry lop_xor_nz_probe3(
+    .param .u64 out,
+    .param .u32 pg,
+    .param .u32 pa,
+    .param .u32 pb
+)
+{
+    .reg .u32 %r<10>;
+    .reg .pred %pguard, %presult;
+    .reg .u64 %rd<3>;
+
+    ld.param.u64 %rd1, [out];
+    cvta.to.global.u64 %rd2, %rd1;
+
+    ld.param.u32 %r1, [pg];
+    ld.param.u32 %r2, [pa];
+    ld.param.u32 %r3, [pb];
+
+    setp.ne.s32 %pguard, %r1, 0;
+
+    @%pguard xor.b32 %r4, %r2, %r3;
+    @%pguard setp.ne.s32 %presult, %r4, 0;
+
+    selp.u32 %r5, 1, 0, %presult;
+    st.global.u32 [%rd2], %r5;
+
+    ret;
+}

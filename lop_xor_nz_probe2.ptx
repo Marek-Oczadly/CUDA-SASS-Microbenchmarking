@@ -1,0 +1,82 @@
+//
+// Second attempt: the first probe's LOP.XOR.NZ samples all landed in constant bank c[0x0]
+// (plain kernel params), which added no new basis info since P0 was already known there. The
+// actual gap needs P0 paired with a c[0x2]-style bank, which real kernels get from explicit
+// __constant__ arrays (PTX .const state space), not plain params. This probe declares a .const
+// array so ptxas assigns it a separate constant bank, and does several xor-vs-nonzero checks
+// against it with varied destination predicates, hoping to land P0 (and others) on that bank.
+//
+.version 7.0
+.target sm_61
+.address_size 64
+
+.const .align 4 .b32 gConst[16];
+
+.visible .entry lop_xor_nz_probe2(
+    .param .u64 out,
+    .param .u32 p0,
+    .param .u32 p1,
+    .param .u32 p2,
+    .param .u32 p3,
+    .param .u32 p4,
+    .param .u32 p5
+)
+{
+    .reg .u32 %r<30>;
+    .reg .pred %p<10>;
+    .reg .u64 %rd<3>;
+
+    ld.param.u64 %rd1, [out];
+    cvta.to.global.u64 %rd2, %rd1;
+
+    ld.param.u32 %r1, [p0];
+    ld.param.u32 %r2, [p1];
+    ld.param.u32 %r3, [p2];
+    ld.param.u32 %r4, [p3];
+    ld.param.u32 %r5, [p4];
+    ld.param.u32 %r6, [p5];
+
+    ld.const.u32 %r10, [gConst+0];
+    ld.const.u32 %r11, [gConst+4];
+    ld.const.u32 %r12, [gConst+8];
+    ld.const.u32 %r13, [gConst+12];
+    ld.const.u32 %r14, [gConst+16];
+    ld.const.u32 %r15, [gConst+20];
+
+    xor.b32 %r20, %r1, %r10;
+    setp.ne.s32 %p1, %r20, 0;
+
+    xor.b32 %r21, %r2, %r11;
+    setp.ne.s32 %p2, %r21, 0;
+
+    xor.b32 %r22, %r3, %r12;
+    setp.ne.s32 %p3, %r22, 0;
+
+    xor.b32 %r23, %r4, %r13;
+    setp.ne.s32 %p4, %r23, 0;
+
+    xor.b32 %r24, %r5, %r14;
+    setp.ne.s32 %p5, %r24, 0;
+
+    xor.b32 %r25, %r6, %r15;
+    setp.ne.s32 %p6, %r25, 0;
+
+    selp.u32 %r16, 1, 0, %p1;
+    selp.u32 %r17, 1, 0, %p2;
+    selp.u32 %r18, 1, 0, %p3;
+
+    add.u32 %r19, %r16, %r17;
+    add.u32 %r19, %r19, %r18;
+
+    selp.u32 %r26, 1, 0, %p4;
+    selp.u32 %r27, 1, 0, %p5;
+    selp.u32 %r28, 1, 0, %p6;
+
+    add.u32 %r19, %r19, %r26;
+    add.u32 %r19, %r19, %r27;
+    add.u32 %r19, %r19, %r28;
+
+    st.global.u32 [%rd2], %r19;
+
+    ret;
+}

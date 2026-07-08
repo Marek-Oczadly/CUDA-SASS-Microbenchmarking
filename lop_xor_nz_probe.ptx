@@ -1,0 +1,85 @@
+//
+// Probe kernel to fill a gap in DefaultInsAsmRepos.sm_61.txt: the value solver has only ever
+// seen one LOP.XOR.NZ record (P0, RZ, R6.reuse, c[0x3][0x100]), which isn't enough to span the
+// value space for that instruction key. This kernel does several independent
+// "xor(param, param) != 0"-shaped computations, each with a dead xor-result register (so ptxas
+// discards it as RZ) and a live predicate, across several u32 kernel params (which Pascal places
+// in constant bank c[0x2][...] at different offsets) - aiming to get ptxas to emit several
+// distinct LOP.XOR.NZ Pd, RZ, Rs, c[0x2][offset] combinations with different destination
+// predicates and different constant offsets.
+//
+.version 7.0
+.target sm_61
+.address_size 64
+
+.visible .entry lop_xor_nz_probe(
+    .param .u64 out,
+    .param .u32 p0,
+    .param .u32 p1,
+    .param .u32 p2,
+    .param .u32 p3,
+    .param .u32 p4,
+    .param .u32 p5,
+    .param .u32 p6,
+    .param .u32 p7,
+    .param .u32 p8,
+    .param .u32 p9,
+    .param .u32 p10,
+    .param .u32 p11
+)
+{
+    .reg .u32 %r<30>;
+    .reg .pred %p<10>;
+    .reg .u64 %rd<3>;
+
+    ld.param.u64 %rd1, [out];
+    cvta.to.global.u64 %rd2, %rd1;
+
+    ld.param.u32 %r1,  [p0];
+    ld.param.u32 %r2,  [p1];
+    ld.param.u32 %r3,  [p2];
+    ld.param.u32 %r4,  [p3];
+    ld.param.u32 %r5,  [p4];
+    ld.param.u32 %r6,  [p5];
+    ld.param.u32 %r7,  [p6];
+    ld.param.u32 %r8,  [p7];
+    ld.param.u32 %r9,  [p8];
+    ld.param.u32 %r10, [p9];
+    ld.param.u32 %r11, [p10];
+    ld.param.u32 %r12, [p11];
+
+    xor.b32 %r20, %r1, %r2;
+    setp.ne.s32 %p1, %r20, 0;
+
+    xor.b32 %r21, %r3, %r4;
+    setp.ne.s32 %p2, %r21, 0;
+
+    xor.b32 %r22, %r5, %r6;
+    setp.ne.s32 %p3, %r22, 0;
+
+    xor.b32 %r23, %r7, %r8;
+    setp.ne.s32 %p4, %r23, 0;
+
+    xor.b32 %r24, %r9, %r10;
+    setp.ne.s32 %p5, %r24, 0;
+
+    xor.b32 %r25, %r11, %r12;
+    setp.ne.s32 %p6, %r25, 0;
+
+    selp.u32 %r13, 1, 0, %p1;
+    selp.u32 %r14, 1, 0, %p2;
+    selp.u32 %r15, 1, 0, %p3;
+    selp.u32 %r16, 1, 0, %p4;
+    selp.u32 %r17, 1, 0, %p5;
+    selp.u32 %r18, 1, 0, %p6;
+
+    add.u32 %r19, %r13, %r14;
+    add.u32 %r19, %r19, %r15;
+    add.u32 %r19, %r19, %r16;
+    add.u32 %r19, %r19, %r17;
+    add.u32 %r19, %r19, %r18;
+
+    st.global.u32 [%rd2], %r19;
+
+    ret;
+}
